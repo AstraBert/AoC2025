@@ -51,3 +51,17 @@ In 818181911112111, the joltage 888911112111 is produced by turning on everythin
 The total output joltage is now much larger: 987654321111 + 811111111119 + 434234234278 + 888911112111 = 3121910778619.
 
 What is the new total output joltage?
+
+## Get the solution
+
+For part 1:
+
+```bash
+go run main.go simple
+```
+
+Fort part 2:
+
+```bash
+go run main.go complex
+```
