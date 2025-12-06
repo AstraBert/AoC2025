@@ -28,6 +28,10 @@ func (r *MaxMinRange) Shares(other *MaxMinRange) []int {
 	return shared
 }
 
+func (r *MaxMinRange) Len() int {
+	return (r.Max - r.Min) + 1
+}
+
 func NewRangeFromStr(min string, max string) (*MaxMinRange, error) {
 	minInt, err := strconv.Atoi(min)
 	if err != nil {
@@ -101,18 +105,23 @@ func CountFreshFoodsComplex(file string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	shared := []int{}
-	for i, r := range ranges {
-		for j := i; j < len(ranges); j++ {
-			sharedInternal := r.Shares(ranges[j])
-			for _, el := range sharedInternal {
-				if !slices.Contains(shared, el) {
-					shared = append(shared, el)
-				}
-			}
+	slices.SortFunc(ranges, func(a *MaxMinRange, b *MaxMinRange) int {
+		return a.Min - b.Min
+	})
+	merged := []*MaxMinRange{ranges[0]}
+	for _, r := range ranges {
+		lastMerged := merged[len(merged)-1]
+		if r.Min <= lastMerged.Max+1 {
+			lastMerged.Max = max(r.Max, lastMerged.Max)
+		} else {
+			merged = append(merged, r)
 		}
 	}
-	return len(shared), nil
+	totalCount := 0
+	for _, m := range merged {
+		totalCount += m.Len()
+	}
+	return totalCount, nil
 }
 
 func main() {
