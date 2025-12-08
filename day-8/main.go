@@ -155,13 +155,61 @@ func chainPairs(pairs []*PointPair) int {
 		return b - a
 	})
 
-	// Multiply top 3
 	total := 1
 	for i := 0; i < 3 && i < len(sizes); i++ {
 		total *= sizes[i]
 	}
 
 	return total
+}
+
+func chainPairsComplex(pairs []*PointPair) (int, error) {
+	slices.SortFunc(pairs, func(a *PointPair, b *PointPair) int {
+		return int(a.Distance - b.Distance)
+	})
+	pointToCircuit := make(map[string]int)
+	circuits := make(map[int][]string)
+
+	nextCircuitID := 0
+	var lastPair *PointPair = nil
+
+	for _, pair := range pairs {
+		fromCircuit, fromExists := pointToCircuit[pair.From]
+		toCircuit, toExists := pointToCircuit[pair.To]
+
+		if !fromExists && !toExists {
+			circuits[nextCircuitID] = []string{pair.From, pair.To}
+			pointToCircuit[pair.From] = nextCircuitID
+			pointToCircuit[pair.To] = nextCircuitID
+			nextCircuitID++
+
+		} else if fromExists && !toExists {
+			circuits[fromCircuit] = append(circuits[fromCircuit], pair.To)
+			pointToCircuit[pair.To] = fromCircuit
+
+		} else if !fromExists && toExists {
+			circuits[toCircuit] = append(circuits[toCircuit], pair.From)
+			pointToCircuit[pair.From] = toCircuit
+
+		} else {
+			if fromCircuit == toCircuit {
+				continue
+			} else {
+				for _, point := range circuits[toCircuit] {
+					circuits[fromCircuit] = append(circuits[fromCircuit], point)
+					pointToCircuit[point] = fromCircuit
+				}
+				delete(circuits, toCircuit)
+			}
+		}
+		lastPair = pair
+	}
+
+	if lastPair == nil {
+		return 0, errors.New("last pair never found")
+	}
+
+	return NewPointFromStr(lastPair.From).X * NewPointFromStr(lastPair.To).X, nil
 }
 
 func GetCircuits(file string, numPairs int) (int, error) {
@@ -173,6 +221,15 @@ func GetCircuits(file string, numPairs int) (int, error) {
 	minDists := getNMinDistances(numPairs, distances)
 	circuits := chainPairs(minDists)
 	return circuits, nil
+}
+
+func GetCircuitsComplex(file string) (int, error) {
+	points, err := linesToPoints(file)
+	if err != nil {
+		return 0, err
+	}
+	distances := calculateDistances(points)
+	return chainPairsComplex(distances)
 }
 
 func main() {
@@ -191,6 +248,11 @@ func main() {
 		}
 		fmt.Println(s)
 	} else {
-		panic(errors.New("solution not implemented yet"))
+		s, err := GetCircuitsComplex("input.txt")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		fmt.Println(s)
 	}
 }
