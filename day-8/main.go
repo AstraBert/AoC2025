@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -27,7 +29,10 @@ func NewPointFromStr(s string) *Point {
 }
 
 func (p1 *Point) Distance(p2 *Point) uint64 {
-	return uint64((p1.X - p2.X) ^ 2 + (p1.Y - p2.Y) ^ 2 + (p1.Z - p2.Z) ^ 2)
+	dx := p1.X - p2.X
+	dy := p1.Y - p2.Y
+	dz := p1.Z - p2.Z
+	return uint64(dx*dx + dy*dy + dz*dz)
 }
 
 func (p *Point) ToString() string {
@@ -58,9 +63,9 @@ func linesToPoints(file string) ([]*Point, error) {
 		return nil, err
 	}
 	lines := strings.Split(string(content), "\n")
-	points := make([]*Point, len(lines))
-	for i, line := range lines {
-		points[i] = NewPointFromStr(strings.Trim(line, "\n"))
+	points := make([]*Point, 0, len(lines))
+	for _, line := range lines {
+		points = append(points, NewPointFromStr(strings.Trim(line, "\n")))
 	}
 	return points, nil
 }
@@ -87,7 +92,7 @@ func getNMinDistances(n int, pairs []*PointPair) []*PointPair {
 	minDists := []*PointPair{}
 	for _, p := range pairs {
 		l := len(minDists)
-		if l < 1000 {
+		if l < n {
 			minDists = append(minDists, p)
 		} else {
 			maxDistIdx := 0
@@ -105,30 +110,57 @@ func getNMinDistances(n int, pairs []*PointPair) []*PointPair {
 }
 
 func chainPairs(pairs []*PointPair) int {
-	circuits := [][]string{{pairs[0].From, pairs[0].To}}
-	for _, pair := range pairs[1:] {
-		appended := false
-		for i, circuit := range circuits {
-			lastEl := circuit[len(circuit)-1]
-			if pair.From == lastEl {
-				circuit = append(circuit, pair.To)
-				circuits[i] = circuit
-				appended = true
-				break
+	pointToCircuit := make(map[string]int)
+	circuits := make(map[int][]string)
+
+	nextCircuitID := 0
+
+	for _, pair := range pairs {
+		fromCircuit, fromExists := pointToCircuit[pair.From]
+		toCircuit, toExists := pointToCircuit[pair.To]
+
+		if !fromExists && !toExists {
+			circuits[nextCircuitID] = []string{pair.From, pair.To}
+			pointToCircuit[pair.From] = nextCircuitID
+			pointToCircuit[pair.To] = nextCircuitID
+			nextCircuitID++
+
+		} else if fromExists && !toExists {
+			circuits[fromCircuit] = append(circuits[fromCircuit], pair.To)
+			pointToCircuit[pair.To] = fromCircuit
+
+		} else if !fromExists && toExists {
+			circuits[toCircuit] = append(circuits[toCircuit], pair.From)
+			pointToCircuit[pair.From] = toCircuit
+
+		} else {
+			if fromCircuit == toCircuit {
+				continue
+			} else {
+				for _, point := range circuits[toCircuit] {
+					circuits[fromCircuit] = append(circuits[fromCircuit], point)
+					pointToCircuit[point] = fromCircuit
+				}
+				delete(circuits, toCircuit)
 			}
 		}
-		if !appended {
-			circuits = append(circuits, []string{pair.From, pair.To})
-		}
 	}
-	slices.SortFunc(circuits, func(a []string, b []string) int {
-		return len(b) - len(a)
+
+	sizes := []int{}
+	for _, circuit := range circuits {
+		sizes = append(sizes, len(circuit))
+	}
+
+	slices.SortFunc(sizes, func(a int, b int) int {
+		return b - a
 	})
+
+	// Multiply top 3
 	total := 1
-	for _, circuit := range circuits[:3] {
-		fmt.Println(circuit)
-		total *= len(circuit)
+	for i := 0; i < 3 && i < len(sizes); i++ {
+		total *= sizes[i]
 	}
+
 	return total
 }
 
@@ -144,6 +176,21 @@ func GetCircuits(file string, numPairs int) (int, error) {
 }
 
 func main() {
-	s, _ := GetCircuits("input.txt", 1000)
-	fmt.Println(s)
+	if len(os.Args) != 2 {
+		log.Fatal("You should provide one positional argument (choices: 'simple' and 'complex')")
+	}
+	complex := false
+	if os.Args[1] == "complex" {
+		complex = true
+	}
+	if !complex {
+		s, err := GetCircuits("input.txt", 1000)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		fmt.Println(s)
+	} else {
+		panic(errors.New("solution not implemented yet"))
+	}
 }
