@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"slices"
@@ -27,7 +30,7 @@ func convertToLights(lights string) []int {
 	ls := make([]int, len(lights))
 	for i, l := range lights {
 		if l == '#' {
-			ls[i] = i
+			ls[i] = 1
 		} else {
 			ls[i] = 0
 		}
@@ -39,7 +42,7 @@ func convertToSwitches(switches string, machineLength int) [][]int {
 	ls := strings.Split(switches, ") ")
 	finalLs := [][]int{}
 	for _, l := range ls {
-		button := strings.TrimSpace(strings.ReplaceAll(l, ")", ""))
+		button := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(l, ")", ""), "(", ""))
 		buttonLs := []string{}
 		if strings.ContainsRune(button, ',') {
 			buttonLs = strings.Split(button, ",")
@@ -50,7 +53,7 @@ func convertToSwitches(switches string, machineLength int) [][]int {
 		for j := range machineLength {
 			sJ := strconv.Itoa(j)
 			if slices.Contains(buttonLs, sJ) {
-				intLs = append(intLs, j)
+				intLs = append(intLs, 1)
 			} else {
 				intLs = append(intLs, 0)
 			}
@@ -87,7 +90,145 @@ func getGroupsRegex(lines []string) []*Machine {
 	return machines
 }
 
+func lightMachine(m *Machine) int {
+	n := len(m.Lights)
+	numButtons := len(m.Switches)
+	matrix := make([][]int, n)
+	for i := range matrix {
+		matrix[i] = make([]int, numButtons+1)
+		for j := range numButtons {
+			matrix[i][j] = m.Switches[j][i]
+		}
+		matrix[i][numButtons] = m.Lights[i]
+	}
+
+	pivotCol := 0
+	for row := 0; row < n && pivotCol < numButtons; row++ {
+		pivotRow := -1
+		for r := row; r < n; r++ {
+			if matrix[r][pivotCol] == 1 {
+				pivotRow = r
+				break
+			}
+		}
+
+		if pivotRow == -1 {
+			pivotCol++
+			row--
+			continue
+		}
+
+		matrix[row], matrix[pivotRow] = matrix[pivotRow], matrix[row]
+
+		for r := range n {
+			if r != row && matrix[r][pivotCol] == 1 {
+				for c := 0; c <= numButtons; c++ {
+					matrix[r][c] ^= matrix[row][c]
+				}
+			}
+		}
+		pivotCol++
+	}
+
+	freeVars := []int{}
+
+	for col := range numButtons {
+		isPivot := false
+		for row := range n {
+			if matrix[row][col] == 1 {
+				isLeading := true
+				for c := 0; c < col; c++ {
+					if matrix[row][c] == 1 {
+						isLeading = false
+						break
+					}
+				}
+				if isLeading {
+					isPivot = true
+					break
+				}
+			}
+		}
+		if !isPivot {
+			freeVars = append(freeVars, col)
+		}
+	}
+
+	minPresses := numButtons + 1
+	numFreeVars := len(freeVars)
+
+	for combo := 0; combo < (1 << numFreeVars); combo++ {
+		testSol := make([]int, numButtons)
+		for i, fv := range freeVars {
+			if (combo>>i)&1 == 1 {
+				testSol[fv] = 1
+			}
+		}
+
+		for row := n - 1; row >= 0; row-- {
+			pivotCol := -1
+			for col := range numButtons {
+				if matrix[row][col] == 1 {
+					pivotCol = col
+					break
+				}
+			}
+
+			if pivotCol == -1 {
+				continue
+			}
+
+			val := matrix[row][numButtons]
+			for col := pivotCol + 1; col < numButtons; col++ {
+				if matrix[row][col] == 1 {
+					val ^= testSol[col]
+				}
+			}
+			testSol[pivotCol] = val
+		}
+
+		presses := 0
+		for _, v := range testSol {
+			presses += v
+		}
+
+		if presses < minPresses {
+			minPresses = presses
+		}
+	}
+
+	return minPresses
+}
+
+func LightAllMachines(file string) (int, error) {
+	lines, err := getLines(file)
+	if err != nil {
+		return 0, err
+	}
+	machines := getGroupsRegex(lines)
+	presses := 0
+	for _, m := range machines {
+		presses += lightMachine(m)
+	}
+	return presses, nil
+}
+
 func main() {
-	lines, _ := getLines("test.txt")
-	getGroupsRegex(lines)
+	if len(os.Args) != 2 {
+		log.Fatal("You should provide one positional argument (choices: 'simple' and 'complex')")
+	}
+	complex := false
+	if os.Args[1] == "complex" {
+		complex = true
+	}
+	if !complex {
+		s, err := LightAllMachines("input.txt")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		fmt.Println(s)
+	} else {
+		panic(errors.New("solution not yet implemented"))
+	}
 }
