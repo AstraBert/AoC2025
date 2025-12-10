@@ -7,8 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	pin "github.com/serxoz/pinpol"
 )
 
 type SimplePoint struct {
@@ -16,11 +14,9 @@ type SimplePoint struct {
 	Y int
 }
 
-func (p *SimplePoint) ToPinPoint() pin.Point {
-	return pin.Point{
-		X: float64(p.X),
-		Y: float64(p.Y),
-	}
+type Edge struct {
+	Start *SimplePoint
+	End   *SimplePoint
 }
 
 func (p1 *SimplePoint) Area(p2 *SimplePoint) int {
@@ -52,6 +48,13 @@ func NewPointFromStr(s string) *SimplePoint {
 	}
 }
 
+func NewEdge(p1 *SimplePoint, p2 *SimplePoint) *Edge {
+	return &Edge{
+		Start: p1,
+		End:   p2,
+	}
+}
+
 func getPoints(file string) ([]*SimplePoint, error) {
 	content, err := os.ReadFile(file)
 	if err != nil {
@@ -80,34 +83,66 @@ func getMaxArea(points []*SimplePoint) int {
 	return maxArea
 }
 
-func isPointInList(point *SimplePoint, polygon []pin.Point) bool {
-	return pin.IsInside(polygon, len(polygon), point.ToPinPoint())
-}
-
-func toPinPointsList(points []*SimplePoint) []pin.Point {
-	pinpoints := make([]pin.Point, len(points))
-	for i := range points {
-		pinpoints[i] = points[i].ToPinPoint()
+func getMaxAreaComplex(file string) (int, error) {
+	sort := func(a int, b int) (int, int) {
+		if a < b {
+			return a, b
+		} else {
+			return b, a
+		}
 	}
-	return pinpoints
-}
+	abs := func(a int) int {
+		return int(math.Abs(float64(a)))
+	}
+	manhattanDistance := func(a, b *SimplePoint) int {
+		return abs(a.X-b.X) + abs(a.Y-b.Y)
+	}
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return 0, err
+	}
+	lines := strings.Split(string(content), "\n")
+	redTiles := []*SimplePoint{}
+	edges := []*Edge{}
+	firstTile := NewPointFromStr(strings.Trim(lines[0], "\n"))
+	lastTile := NewPointFromStr(strings.Trim(lines[len(lines)-1], "\n"))
 
-func getMaxAreaComplex(points []*SimplePoint) int {
-	maxArea := 0
-	pinpoints := toPinPointsList(points)
-	for i := range points {
-		p1 := points[i]
-		for j := i + 1; j < len(points); j++ {
-			p2 := points[j]
-			area, p3, p4 := p1.AreaAndCorners(p2)
-			if isPointInList(p3, pinpoints) && isPointInList(p4, pinpoints) {
-				if area > maxArea {
-					maxArea = area
+	for i := range len(lines) - 1 {
+		pointFrom := NewPointFromStr(lines[i])
+		pointTo := NewPointFromStr(lines[i+1])
+		edges = append(edges, NewEdge(pointFrom, pointTo))
+		redTiles = append(redTiles, pointFrom, pointTo)
+	}
+	edges = append(edges, NewEdge(firstTile, lastTile))
+	intersections := func(minX, minY, maxX, maxY int) bool {
+		for _, inter := range edges {
+			iMinX, iMaxX := sort(inter.Start.X, inter.End.X)
+			iMinY, iMaxY := sort(inter.Start.Y, inter.End.Y)
+			if minX < iMaxX && maxX > iMinX && minY < iMaxY && maxY > iMinY {
+				return true
+			}
+		}
+		return false
+	}
+	result := 0
+	for fromIndex := range len(redTiles) - 1 {
+		for toIndex := fromIndex; toIndex < len(redTiles); toIndex++ {
+			fromTile := redTiles[fromIndex]
+			toTile := redTiles[toIndex]
+			minX, maxX := sort(fromTile.X, toTile.X)
+			minY, maxY := sort(fromTile.Y, toTile.Y)
+			mD := manhattanDistance(fromTile, toTile)
+			if mD*mD > result {
+				if !intersections(minX, minY, maxX, maxY) {
+					area := fromTile.Area(toTile)
+					if area > result {
+						result = area
+					}
 				}
 			}
 		}
 	}
-	return maxArea
+	return result, nil
 }
 
 func FindBiggestRectangle(file string) (int, error) {
@@ -120,12 +155,7 @@ func FindBiggestRectangle(file string) (int, error) {
 }
 
 func FindBiggestRectangleComplex(file string) (int, error) {
-	points, err := getPoints(file)
-	if err != nil {
-		return 0, err
-	}
-	maxArea := getMaxAreaComplex(points)
-	return maxArea, nil
+	return getMaxAreaComplex(file)
 }
 
 func main() {
