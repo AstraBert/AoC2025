@@ -229,6 +229,6 @@ func main() {
 		}
 		fmt.Println(s)
 	} else {
-		panic(errors.New("solution not yet implemented"))
+		panic(errors.New("couldn't figure out a solution for this one"))
 	}
 }
