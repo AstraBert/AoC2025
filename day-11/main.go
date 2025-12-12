@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -40,18 +39,46 @@ func getToOut(servers map[string][]string, server string) int {
 	return paths
 }
 
-func getToOutComplex(servers map[string][]string, server string) [][]string {
-	allPaths := [][]string{}
-	if servers[server][0] == "out" {
-		return [][]string{{server}}
+type FuncCache struct {
+	Server   string
+	FoundDac bool
+	FoundFft bool
+}
+
+func NewFuncCache(server string, foundDac, foundFft bool) FuncCache {
+	return FuncCache{
+		Server:   server,
+		FoundDac: foundDac,
+		FoundFft: foundFft,
+	}
+}
+
+func getToOutComplex(servers map[string][]string, server string, foundDac bool, foundFft bool) int {
+	cache := make(map[FuncCache]int)
+	return getToOutComplexFuncCache(servers, server, foundDac, foundFft, cache)
+}
+
+func getToOutComplexFuncCache(servers map[string][]string, server string, foundDac bool, foundFft bool, cache map[FuncCache]int) int {
+	key := NewFuncCache(server, foundDac, foundFft)
+	if val, ok := cache[key]; ok {
+		return val
+	}
+	allPaths := 0
+	if servers[server][0] == "out" && foundDac && foundFft {
+		return 1
+	} else if servers[server][0] == "out" && (!foundDac || !foundFft) {
+		return 0
+	}
+	switch server {
+	case "fft":
+		foundFft = true
+	case "dac":
+		foundDac = false
 	}
 	for _, s := range servers[server] {
-		childPaths := getToOutComplex(servers, s)
-		for _, childPath := range childPaths {
-			newPath := append([]string{server}, childPath...)
-			allPaths = append(allPaths, newPath)
-		}
+		allPaths += getToOutComplex(servers, s, foundDac, foundFft)
 	}
+	cache[key] = allPaths
 	return allPaths
 }
 
@@ -66,19 +93,13 @@ func getAllPaths(servers map[string][]string) int {
 }
 
 func getAllPathsComplex(servers map[string][]string) int {
-	paths := [][]string{}
+	paths := 0
 	for k := range servers {
 		if k == "svr" {
-			paths = getToOutComplex(servers, k)
+			paths += getToOutComplex(servers, k, false, false)
 		}
 	}
-	count := 0
-	for _, p := range paths {
-		if slices.Contains(p, "fft") && slices.Contains(p, "dac") {
-			count += 1
-		}
-	}
-	return count
+	return paths
 }
 
 func FindAllWaysOut(file string) (int, error) {
